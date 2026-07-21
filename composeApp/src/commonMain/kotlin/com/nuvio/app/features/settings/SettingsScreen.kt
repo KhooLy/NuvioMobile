@@ -76,6 +76,8 @@ import com.nuvio.app.features.trakt.TraktAuthRepository
 import com.nuvio.app.features.trakt.TraktCommentsSettings
 import com.nuvio.app.features.trakt.TraktSettingsRepository
 import com.nuvio.app.features.trakt.TraktSettingsUiState
+import com.nuvio.app.features.simkl.SimklAuthRepository
+import com.nuvio.app.features.simkl.SimklAuthUiState
 import com.nuvio.app.features.tmdb.TmdbSettings
 import com.nuvio.app.features.tmdb.TmdbSettingsRepository
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
@@ -171,6 +173,10 @@ fun SettingsScreen(
         val traktAuthUiState by remember {
             TraktAuthRepository.ensureLoaded()
             TraktAuthRepository.uiState
+        }.collectAsStateWithLifecycle()
+        val simklAuthUiState by remember {
+            SimklAuthRepository.ensureLoaded()
+            SimklAuthRepository.uiState
         }.collectAsStateWithLifecycle()
         val traktCommentsEnabled by remember {
             TraktCommentsSettings.ensureLoaded()
@@ -400,6 +406,7 @@ fun SettingsScreen(
                 mdbListSettings = mdbListSettings,
                 debridSettings = debridSettings,
                 traktAuthUiState = traktAuthUiState,
+                simklAuthUiState = simklAuthUiState,
                 traktCommentsEnabled = traktCommentsEnabled,
                 traktSettingsUiState = traktSettingsUiState,
                 homescreenHeroEnabled = homescreenSettingsUiState.heroEnabled,
@@ -461,6 +468,7 @@ fun SettingsScreen(
                 mdbListSettings = mdbListSettings,
                 debridSettings = debridSettings,
                 traktAuthUiState = traktAuthUiState,
+                simklAuthUiState = simklAuthUiState,
                 traktCommentsEnabled = traktCommentsEnabled,
                 traktSettingsUiState = traktSettingsUiState,
                 homescreenHeroEnabled = homescreenSettingsUiState.heroEnabled,
@@ -532,6 +540,7 @@ private fun MobileSettingsScreen(
     mdbListSettings: MdbListSettings,
     debridSettings: DebridSettings,
     traktAuthUiState: TraktAuthUiState,
+    simklAuthUiState: SimklAuthUiState,
     traktCommentsEnabled: Boolean,
     traktSettingsUiState: TraktSettingsUiState,
     homescreenHeroEnabled: Boolean,
@@ -796,6 +805,7 @@ private fun MobileSettingsScreen(
                 SettingsPage.TraktAuthentication -> traktSettingsContent(
                     isTablet = false,
                     uiState = traktAuthUiState,
+                    simklUiState = simklAuthUiState,
                     settingsUiState = traktSettingsUiState,
                     commentsEnabled = traktCommentsEnabled,
                     onCommentsEnabledChange = TraktCommentsSettings::setEnabled,
@@ -890,6 +900,7 @@ private fun TabletSettingsScreen(
     mdbListSettings: MdbListSettings,
     debridSettings: DebridSettings,
     traktAuthUiState: TraktAuthUiState,
+    simklAuthUiState: SimklAuthUiState,
     traktCommentsEnabled: Boolean,
     traktSettingsUiState: TraktSettingsUiState,
     homescreenHeroEnabled: Boolean,
@@ -1210,6 +1221,7 @@ private fun TabletSettingsScreen(
                     SettingsPage.TraktAuthentication -> traktSettingsContent(
                         isTablet = true,
                         uiState = traktAuthUiState,
+                        simklUiState = simklAuthUiState,
                         settingsUiState = traktSettingsUiState,
                         commentsEnabled = traktCommentsEnabled,
                         onCommentsEnabledChange = TraktCommentsSettings::setEnabled,

@@ -45,6 +45,7 @@ import com.nuvio.app.features.search.SearchHistoryStorage
 import com.nuvio.app.features.settings.SentrySettingsStorage
 import com.nuvio.app.features.settings.ThemeSettingsStorage
 import com.nuvio.app.features.trakt.TraktAuthStorage
+import com.nuvio.app.features.simkl.SimklAuthStorage
 import com.nuvio.app.features.trakt.TraktCommentsStorage
 import com.nuvio.app.features.trakt.TraktLibraryStorage
 import com.nuvio.app.features.trakt.TraktSettingsStorage
@@ -101,6 +102,7 @@ class MainActivity : AppCompatActivity() {
         TmdbSettingsStorage.initialize(applicationContext)
         MdbListSettingsStorage.initialize(applicationContext)
         TraktAuthStorage.initialize(applicationContext)
+        SimklAuthStorage.initialize(applicationContext)
         TraktCommentsStorage.initialize(applicationContext)
         TraktLibraryStorage.initialize(applicationContext)
         TraktSettingsStorage.initialize(applicationContext)

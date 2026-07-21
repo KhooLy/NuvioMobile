@@ -222,6 +222,8 @@ import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.trakt.TraktAuthRepository
 import com.nuvio.app.features.trakt.TraktListTab
 import com.nuvio.app.features.trakt.TraktScrobbleRepository
+import com.nuvio.app.features.simkl.SimklAuthRepository
+import com.nuvio.app.features.simkl.SimklScrobbleRepository
 import com.nuvio.app.features.updater.AppUpdaterHost
 import com.nuvio.app.features.updater.AppUpdaterPlatform
 import com.nuvio.app.features.updater.rememberAppUpdaterController
@@ -1246,6 +1248,20 @@ private fun MainAppContent(
                                 progressPercent = progressPercent,
                             )
                         }
+                    }
+                }
+                if (SimklAuthRepository.isAuthenticated.value && progressPercent != null && playerLaunch != null) {
+                    runCatching {
+                        SimklScrobbleRepository.scrobbleStop(
+                            profileId = playerLaunch.profileId,
+                            contentType = playerLaunch.parentMetaType,
+                            parentMetaId = playerLaunch.parentMetaId,
+                            videoId = playerLaunch.videoId,
+                            title = playerLaunch.title,
+                            seasonNumber = playerLaunch.seasonNumber,
+                            episodeNumber = playerLaunch.episodeNumber,
+                            progressPercent = progressPercent,
+                        )
                     }
                 }
                 playerLaunch?.let { playerLaunch ->

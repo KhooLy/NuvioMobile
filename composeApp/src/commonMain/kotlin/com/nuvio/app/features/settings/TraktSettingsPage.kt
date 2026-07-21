@@ -52,6 +52,9 @@ import com.nuvio.app.features.trakt.WatchProgressSource
 import com.nuvio.app.features.trakt.TRAKT_CONTINUE_WATCHING_DAYS_CAP_ALL
 import com.nuvio.app.features.trakt.normalizeTraktContinueWatchingDaysCap
 import com.nuvio.app.features.trakt.traktBrandPainter
+import com.nuvio.app.features.simkl.SimklAuthRepository
+import com.nuvio.app.features.simkl.SimklAuthUiState
+import com.nuvio.app.features.simkl.SimklConnectionMode
 import com.nuvio.app.features.watchprogress.WatchProgressSourceCoordinator
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
@@ -106,6 +109,7 @@ import org.jetbrains.compose.resources.stringResource
 internal fun LazyListScope.traktSettingsContent(
     isTablet: Boolean,
     uiState: TraktAuthUiState,
+    simklUiState: SimklAuthUiState,
     settingsUiState: TraktSettingsUiState,
     commentsEnabled: Boolean,
     onCommentsEnabledChange: (Boolean) -> Unit,
@@ -130,6 +134,14 @@ internal fun LazyListScope.traktSettingsContent(
         }
     }
 
+    item {
+        SettingsSection(title = "SIMKL", isTablet = isTablet) {
+            SettingsGroup(isTablet = isTablet) {
+                SimklConnectionCard(isTablet, simklUiState)
+            }
+        }
+    }
+
     if (uiState.mode == TraktConnectionMode.CONNECTED) {
         item {
             SettingsSection(
@@ -146,6 +158,23 @@ internal fun LazyListScope.traktSettingsContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SimklConnectionCard(isTablet: Boolean, uiState: SimklAuthUiState) {
+    val uriHandler = LocalUriHandler.current
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = if (isTablet) 18.dp else 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Connect SIMKL to sync watch history and playback progress.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        when (uiState.mode) {
+            SimklConnectionMode.CONNECTED -> Button(onClick = SimklAuthRepository::onDisconnectRequested) { Text("Disconnect SIMKL") }
+            else -> Button(onClick = { SimklAuthRepository.onConnectRequested()?.let { runCatching { uriHandler.openUri(it) } } }, enabled = uiState.credentialsConfigured && !uiState.isLoading) { Text(if (uiState.mode == SimklConnectionMode.AWAITING_APPROVAL) "Continue SIMKL sign-in" else "Connect SIMKL") }
+        }
+        uiState.statusMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        uiState.errorMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
     }
 }
 
