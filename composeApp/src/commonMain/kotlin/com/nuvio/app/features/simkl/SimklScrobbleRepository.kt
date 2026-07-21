@@ -49,4 +49,4 @@ internal object SimklScrobbleRepository {
     val progress: Float,
 )
 @kotlinx.serialization.Serializable internal data class SimklMedia(val title: String? = null, val ids: Map<String, String>)
-@kotlinx.serialization.Serializable internal data class SimklEpisode(val season: Int, val number: Int)
+@kotlinx.serialization.Serializable internal data class SimklEpisode(val season: Int? = null, val number: Int)

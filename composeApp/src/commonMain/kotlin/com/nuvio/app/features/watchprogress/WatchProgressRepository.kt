@@ -18,6 +18,8 @@ import com.nuvio.app.features.trakt.WatchProgressSource
 import com.nuvio.app.features.trakt.effectiveWatchProgressSource
 import com.nuvio.app.features.trakt.isTraktCompatibleId
 import com.nuvio.app.features.trakt.resolveEffectiveContentId
+import com.nuvio.app.features.simkl.SimklAuthRepository
+import com.nuvio.app.features.simkl.SimklProgressRepository
 import com.nuvio.app.features.watching.application.WatchingActions
 import com.nuvio.app.features.watching.sync.ProgressDeltaEvent
 import com.nuvio.app.features.watching.sync.ProgressSyncRecord
@@ -241,6 +243,15 @@ object WatchProgressRepository {
                     publish()
                 }
             }
+        }
+        syncScope.launch {
+            SimklAuthRepository.isAuthenticated.collectLatest {
+                SimklProgressRepository.refresh()
+                publish()
+            }
+        }
+        syncScope.launch {
+            SimklProgressRepository.entries.collectLatest { publish() }
         }
 
         syncScope.launch {
@@ -1499,7 +1510,7 @@ object WatchProgressRepository {
         }
 
     private fun currentEntries(): List<WatchProgressEntry> {
-        return if (shouldUseTraktProgress()) {
+        val baseEntries = if (shouldUseTraktProgress()) {
             // Merge Trakt remote progress with local-only entries that use
             // non-Trakt-compatible IDs (kitsu:, mal:, anilist:, etc.).
             // Trakt will never return these IDs, so they must come from local storage.
@@ -1522,6 +1533,10 @@ object WatchProgressRepository {
         } else {
             localEntriesSnapshot()
         }
+        val simklEntries = SimklProgressRepository.entries.value
+        if (simklEntries.isEmpty()) return baseEntries
+        val keys = baseEntries.mapTo(mutableSetOf()) { it.resolvedProgressKey() }
+        return baseEntries + simklEntries.filter { it.resolvedProgressKey() !in keys }
     }
 
     private fun localEntriesSnapshot(): List<WatchProgressEntry> =
