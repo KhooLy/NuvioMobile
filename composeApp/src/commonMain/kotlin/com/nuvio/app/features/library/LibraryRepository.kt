@@ -16,6 +16,10 @@ import com.nuvio.app.features.trakt.TraktMembershipChanges
 import com.nuvio.app.features.trakt.TraktSettingsRepository
 import com.nuvio.app.features.trakt.effectiveLibrarySourceMode as resolveEffectiveLibrarySourceMode
 import com.nuvio.app.features.trakt.shouldUseTraktLibrary
+import com.nuvio.app.features.simkl.SimklAuthRepository
+import com.nuvio.app.features.simkl.SimklMedia
+import com.nuvio.app.features.simkl.SimklMediaType
+import com.nuvio.app.features.simkl.SimklSyncRepository
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.atomicfu.locks.SynchronizedObject
@@ -105,6 +109,11 @@ object LibraryRepository {
             }
         }
         syncScope.launch {
+            SimklAuthRepository.isAuthenticated.collectLatest { authenticated ->
+                if (authenticated) importSimklLibrary()
+            }
+        }
+        syncScope.launch {
             TraktSettingsRepository.uiState
                 .map { it.librarySourceMode }
                 .distinctUntilChanged()
@@ -142,6 +151,20 @@ object LibraryRepository {
             if (isTraktLibrarySourceActive()) {
                 refreshTraktLibraryAsync()
             }
+        }
+        if (SimklAuthRepository.isAuthenticated.value) importSimklLibrary()
+    }
+
+    /** Imports the user's SIMKL list into the normal Nuvio library without changing its source mode. */
+    fun importSimklLibrary() {
+        if (!localState.snapshot().hasLoaded) loadFromDisk(ProfileRepository.activeProfileId)
+        syncScope.launch {
+            val items = buildList {
+                addAll(SimklSyncRepository.library(SimklMediaType.MOVIE).mapNotNull { it.movie?.toLibraryItem("movie") })
+                addAll(SimklSyncRepository.library(SimklMediaType.SHOW).mapNotNull { (it.show ?: it.anime)?.toLibraryItem("series") })
+                addAll(SimklSyncRepository.library(SimklMediaType.ANIME).mapNotNull { (it.anime ?: it.show)?.toLibraryItem("series") })
+            }.distinctBy { it.type to it.id }
+            items.forEach(::save)
         }
     }
 
@@ -722,3 +745,16 @@ private fun localizedLibraryOtherTitle(): String =
 private fun localizedStringOrDefault(resource: StringResource, fallback: String): String =
     runCatching { runBlocking { getString(resource) } }
         .getOrDefault(fallback)
+
+private fun SimklMedia.toLibraryItem(type: String): LibraryItem? {
+    val id = ids["imdb"] ?: ids["tmdb"]?.let { "tmdb:$it" } ?: return null
+    val name = title?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return LibraryItem(
+        id = id,
+        type = type,
+        name = name,
+        imdbId = ids["imdb"],
+        tmdbId = ids["tmdb"]?.toIntOrNull(),
+        savedAtEpochMs = 0L,
+    )
+}
