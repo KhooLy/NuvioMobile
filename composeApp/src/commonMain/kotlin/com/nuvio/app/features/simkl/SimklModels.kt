@@ -1,12 +1,15 @@
 package com.nuvio.app.features.simkl
 
 import kotlinx.serialization.Serializable
+import com.nuvio.app.features.library.LibraryItem
 
 @Serializable
 internal data class SimklAuthState(
     val accessToken: String? = null,
     val pendingState: String? = null,
     val pendingVerifier: String? = null,
+    val librarySyncCursor: String? = null,
+    val libraryItems: List<LibraryItem> = emptyList(),
 ) { val isAuthenticated get() = !accessToken.isNullOrBlank() }
 
 enum class SimklConnectionMode { DISCONNECTED, AWAITING_APPROVAL, CONNECTED }

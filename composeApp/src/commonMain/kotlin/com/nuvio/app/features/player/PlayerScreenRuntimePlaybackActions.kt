@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import com.nuvio.app.features.tmdb.TmdbService
+import com.nuvio.app.features.simkl.SimklScrobbleRepository
 import com.nuvio.app.features.trakt.TraktScrobbleRepository
 import com.nuvio.app.features.watchprogress.WatchProgressClock
 import com.nuvio.app.features.watchprogress.WatchProgressPlaybackSession
@@ -70,6 +71,8 @@ internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
         pendingScrobbleStartAfterSeek = false
         hasSentCompletionScrobbleForCurrentItem = false
         currentTraktScrobbleItem = null
+        hasRequestedSimklScrobbleStartForCurrentItem = false
+        currentSimklScrobbleItem = null
     }
 }
 
@@ -115,6 +118,17 @@ private suspend fun TraktScrobbleItemInputs.buildItem() =
 internal suspend fun PlayerScreenRuntime.currentTraktScrobbleItem() =
     snapshotTraktScrobbleItemInputs().buildItem()
 
+private suspend fun PlayerScreenRuntime.currentSimklScrobbleItem() =
+    SimklScrobbleRepository.buildItem(
+        contentType = contentType ?: parentMetaType,
+        parentMetaId = parentMetaId,
+        videoId = activeVideoId,
+        title = title,
+        seasonNumber = activeSeasonNumber,
+        episodeNumber = activeEpisodeNumber,
+        episodeTitle = activeEpisodeTitle,
+    )
+
 internal fun PlayerScreenRuntime.emitTraktScrobbleStart() {
     if (hasRequestedScrobbleStartForCurrentItem) return
     hasRequestedScrobbleStartForCurrentItem = true
@@ -132,6 +146,24 @@ internal fun PlayerScreenRuntime.emitTraktScrobbleStart() {
         }
         currentTraktScrobbleItem = item
         TraktScrobbleRepository.scrobbleStart(
+            profileId = profileId,
+            item = item,
+            progressPercent = currentPlaybackProgressPercent(),
+        )
+    }
+}
+
+internal fun PlayerScreenRuntime.emitSimklScrobbleStart() {
+    if (hasRequestedSimklScrobbleStartForCurrentItem) return
+    hasRequestedSimklScrobbleStartForCurrentItem = true
+    scope.launch {
+        val item = currentSimklScrobbleItem()
+        if (item == null) {
+            hasRequestedSimklScrobbleStartForCurrentItem = false
+            return@launch
+        }
+        currentSimklScrobbleItem = item
+        SimklScrobbleRepository.scrobbleStart(
             profileId = profileId,
             item = item,
             progressPercent = currentPlaybackProgressPercent(),
@@ -159,16 +191,49 @@ internal fun PlayerScreenRuntime.emitTraktScrobbleStop(progressPercent: Float? =
     scrobbleStartRequestGeneration += 1L
 }
 
+internal enum class SimklPlaybackAction { PAUSE, STOP }
+
+internal fun PlayerScreenRuntime.emitSimklScrobbleStop(
+    progressPercent: Float? = null,
+    action: SimklPlaybackAction = SimklPlaybackAction.STOP,
+) {
+    val percent = progressPercent ?: currentPlaybackProgressPercent()
+    if (!hasRequestedSimklScrobbleStartForCurrentItem && percent < 80f) return
+    val itemSnapshot = currentSimklScrobbleItem
+
+    scope.launch(NonCancellable) {
+        val item = itemSnapshot ?: currentSimklScrobbleItem() ?: return@launch
+        when (action) {
+            SimklPlaybackAction.PAUSE -> SimklScrobbleRepository.scrobblePause(
+                profileId = profileId,
+                item = item,
+                progressPercent = percent,
+            )
+            SimklPlaybackAction.STOP -> SimklScrobbleRepository.scrobbleStop(
+                profileId = profileId,
+                item = item,
+                progressPercent = percent,
+            )
+        }
+    }
+    hasRequestedSimklScrobbleStartForCurrentItem = false
+    if (action == SimklPlaybackAction.STOP) {
+        currentSimklScrobbleItem = null
+    }
+}
+
 internal fun PlayerScreenRuntime.emitStopScrobbleForCurrentProgress() {
     val progressPercent = currentPlaybackProgressPercent()
     if (progressPercent >= 1f && progressPercent < 80f) {
         emitTraktScrobbleStop(progressPercent)
+        emitSimklScrobbleStop(progressPercent)
         return
     }
 
     if (progressPercent >= 80f && !hasSentCompletionScrobbleForCurrentItem) {
         hasSentCompletionScrobbleForCurrentItem = true
         emitTraktScrobbleStop(progressPercent)
+        emitSimklScrobbleStop(progressPercent)
     }
 }
 
@@ -192,8 +257,16 @@ internal suspend fun PlayerScreenRuntime.resolveParentalGuideImdbId(): String? {
     )
 }
 
-internal fun PlayerScreenRuntime.flushWatchProgress() {
-    emitStopScrobbleForCurrentProgress()
+internal fun PlayerScreenRuntime.flushWatchProgress(paused: Boolean = false) {
+    if (paused) {
+        val progressPercent = currentPlaybackProgressPercent()
+        if (progressPercent >= 1f && progressPercent < 80f) {
+            emitTraktScrobbleStop(progressPercent)
+            emitSimklScrobbleStop(progressPercent, SimklPlaybackAction.PAUSE)
+        }
+    } else {
+        emitStopScrobbleForCurrentProgress()
+    }
     WatchProgressRepository.flushPlaybackProgress(
         session = playbackSession,
         snapshot = playbackSnapshot,
@@ -213,10 +286,12 @@ internal fun PlayerScreenRuntime.scheduleProgressSyncAfterSeek() {
         val progressPercent = currentPlaybackProgressPercent()
         if (progressPercent >= 1f && progressPercent < 80f) {
             emitTraktScrobbleStop(progressPercent)
+            emitSimklScrobbleStop(progressPercent)
             val shouldRestartScrobbleNow = shouldRestartScrobbleAfterSeek && shouldPlay
             if (shouldRestartScrobbleNow && playbackSnapshot.isPlaying) {
                 pendingScrobbleStartAfterSeek = false
                 emitTraktScrobbleStart()
+                emitSimklScrobbleStart()
             } else if (shouldRestartScrobbleNow) {
                 pendingScrobbleStartAfterSeek = true
             }

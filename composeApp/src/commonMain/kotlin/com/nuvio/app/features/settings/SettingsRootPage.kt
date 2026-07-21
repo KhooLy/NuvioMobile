@@ -53,6 +53,7 @@ import nuvio.composeapp.generated.resources.compose_settings_root_advanced_secti
 import nuvio.composeapp.generated.resources.compose_settings_page_content_discovery
 import nuvio.composeapp.generated.resources.compose_settings_page_trakt
 import nuvio.composeapp.generated.resources.settings_playback_subtitle
+import nuvio.composeapp.generated.resources.settings_simkl_description
 import nuvio.composeapp.generated.resources.updates_debug_test_description
 import nuvio.composeapp.generated.resources.updates_debug_test_title
 import nuvio.composeapp.generated.resources.about_supporters_contributors_subtitle
@@ -68,6 +69,7 @@ internal fun LazyListScope.settingsRootContent(
     onContentDiscoveryClick: () -> Unit,
     onIntegrationsClick: () -> Unit,
     onTraktClick: () -> Unit,
+    onSimklClick: () -> Unit,
     onSupportersContributorsClick: () -> Unit,
     onLicensesAttributionsClick: () -> Unit,
     onCheckForUpdatesClick: (() -> Unit)? = null,
@@ -107,12 +109,14 @@ internal fun LazyListScope.settingsRootContent(
                     )
                     SettingsGroupDivider(isTablet = isTablet)
                     SettingsNavigationRow(
-                        title = stringResource(Res.string.compose_settings_page_trakt),
-                        description = stringResource(Res.string.compose_settings_root_trakt_description),
+                        title = "Trakt",
+                        description = "Connect and manage your Trakt account.",
                         iconPainter = integrationLogoPainter(IntegrationLogo.Trakt),
                         isTablet = isTablet,
                         onClick = onTraktClick,
                     )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsNavigationRow(title = "SIMKL", description = stringResource(Res.string.settings_simkl_description), icon = Icons.Rounded.PlayArrow, isTablet = isTablet, onClick = onSimklClick)
                 }
             }
         }

@@ -85,7 +85,7 @@ internal data class LibraryVerticalProjection(
 )
 
 internal fun availableLibrarySortOptions(sourceMode: LibrarySourceMode): List<LibrarySortOption> =
-    if (sourceMode == LibrarySourceMode.TRAKT) {
+    if (sourceMode == LibrarySourceMode.TRAKT || sourceMode == LibrarySourceMode.SIMKL) {
         LibrarySortOption.entries
     } else {
         LibrarySortOption.entries.filterNot { it == LibrarySortOption.DEFAULT }

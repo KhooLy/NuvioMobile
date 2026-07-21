@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Read-only SIMKL playback mirror used by Nuvio's unified Continue Watching rail. */
 internal object SimklProgressRepository {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _entries = MutableStateFlow<List<WatchProgressEntry>>(emptyList())
@@ -25,7 +24,7 @@ internal object SimklProgressRepository {
 
     private fun toEntry(playback: SimklPlayback): WatchProgressEntry? {
         val media = playback.movie ?: playback.show ?: return null
-        val id = media.ids["imdb"] ?: media.ids["tmdb"]?.let { "tmdb:$it" } ?: media.ids["simkl"] ?: return null
+        val id = media.id("imdb") ?: media.id("tmdb")?.let { "tmdb:$it" } ?: media.id("simkl") ?: return null
         val episode = playback.episode
         val isMovie = playback.movie != null
         return WatchProgressEntry(

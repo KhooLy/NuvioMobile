@@ -16,8 +16,8 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.random.Random
+import com.nuvio.app.features.library.LibraryItem
 
-/** SIMKL mobile OAuth uses PKCE; no client secret is embedded in the app. */
 object SimklAuthRepository {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -37,7 +37,7 @@ object SimklAuthRepository {
         val oauthState = randomToken(32)
         state = state.copy(pendingState = oauthState, pendingVerifier = verifier)
         save(); publish(status = "Finish SIMKL sign-in in your browser.")
-        return "https://api.simkl.com/oauth/authorize?client_id=${SimklConfig.CLIENT_ID.encodeURLParameter()}&redirect_uri=${SimklConfig.REDIRECT_URI.encodeURLParameter()}&response_type=code&code_challenge=${simklSha256Base64Url(verifier).encodeURLParameter()}&code_challenge_method=S256&state=${oauthState.encodeURLParameter()}"
+        return "https://simkl.com/oauth/authorize?client_id=${SimklConfig.CLIENT_ID.encodeURLParameter()}&redirect_uri=${SimklConfig.REDIRECT_URI.encodeURLParameter()}&response_type=code&code_challenge=${simklSha256Base64Url(verifier).encodeURLParameter()}&code_challenge_method=S256&state=${oauthState.encodeURLParameter()}"
     }
     fun onAuthCallbackReceived(url: String) {
         ensureLoaded()
@@ -45,10 +45,14 @@ object SimklAuthRepository {
         scope.launch { complete(url) }
     }
     fun onDisconnectRequested() { ensureLoaded(); state = SimklAuthState(); save(); publish(status = "SIMKL disconnected.") }
+    fun clearLocalState() { loaded = false; state = SimklAuthState(); SimklAuthStorage.savePayload(""); publish() }
     suspend fun authorizedHeaders(): Map<String, String>? {
-        ensureLoaded(); val token = state.accessToken?.takeIf(String::isNotBlank) ?: return null
+        ensureLoaded()
+        val token = state.accessToken?.takeIf(String::isNotBlank) ?: return null
         return mapOf("Authorization" to "Bearer $token", "User-Agent" to "Nuvio/1.0", "Content-Type" to "application/json")
     }
+    internal fun librarySnapshot(): Pair<String?, List<LibraryItem>> { ensureLoaded(); return state.librarySyncCursor to state.libraryItems }
+    internal fun saveLibrarySnapshot(cursor: String?, items: List<LibraryItem>) { ensureLoaded(); state = state.copy(librarySyncCursor = cursor, libraryItems = items); save() }
     private suspend fun complete(url: String) {
         val callback = runCatching { Url(url) }.getOrNull()
         val code = callback?.parameters?.get("code")

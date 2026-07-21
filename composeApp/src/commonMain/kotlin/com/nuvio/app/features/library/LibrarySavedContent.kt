@@ -28,6 +28,7 @@ import nuvio.composeapp.generated.resources.library_sort_added_desc
 import nuvio.composeapp.generated.resources.library_sort_title_asc
 import nuvio.composeapp.generated.resources.library_sort_title_desc
 import nuvio.composeapp.generated.resources.library_sort_trakt_order
+import nuvio.composeapp.generated.resources.library_sort_simkl_order
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -86,10 +87,10 @@ internal fun LibrarySavedControls(
 
         NuvioDropdownChip(
             title = stringResource(Res.string.library_filter_sort),
-            label = librarySortOptionLabel(sortOption),
+            label = librarySortOptionLabel(sortOption, sourceMode),
             selectedKey = sortOption.name,
             options = sortOptions.map { option ->
-                NuvioDropdownOption(key = option.name, label = librarySortOptionLabel(option))
+                NuvioDropdownOption(key = option.name, label = librarySortOptionLabel(option, sourceMode))
             },
             enabled = sortOptions.size > 1,
             onSelected = { option ->
@@ -156,9 +157,9 @@ internal fun LazyItemScope.libraryContentTransitionModifier(): Modifier =
     )
 
 @Composable
-private fun librarySortOptionLabel(option: LibrarySortOption): String =
+private fun librarySortOptionLabel(option: LibrarySortOption, sourceMode: LibrarySourceMode): String =
     when (option) {
-        LibrarySortOption.DEFAULT -> stringResource(Res.string.library_sort_trakt_order)
+        LibrarySortOption.DEFAULT -> if (sourceMode == LibrarySourceMode.SIMKL) stringResource(Res.string.library_sort_simkl_order) else stringResource(Res.string.library_sort_trakt_order)
         LibrarySortOption.ADDED_DESC -> stringResource(Res.string.library_sort_added_desc)
         LibrarySortOption.ADDED_ASC -> stringResource(Res.string.library_sort_added_asc)
         LibrarySortOption.TITLE_ASC -> stringResource(Res.string.library_sort_title_asc)

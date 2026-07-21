@@ -104,12 +104,15 @@ import nuvio.composeapp.generated.resources.trakt_watch_progress_source_trakt
 import nuvio.composeapp.generated.resources.trakt_watch_progress_subtitle
 import nuvio.composeapp.generated.resources.trakt_watch_progress_title
 import nuvio.composeapp.generated.resources.trakt_watch_progress_trakt_selected
+import nuvio.composeapp.generated.resources.settings_simkl_intro
+import nuvio.composeapp.generated.resources.settings_simkl_connect
+import nuvio.composeapp.generated.resources.settings_simkl_continue_sign_in
+import nuvio.composeapp.generated.resources.settings_simkl_disconnect
 import org.jetbrains.compose.resources.stringResource
 
 internal fun LazyListScope.traktSettingsContent(
     isTablet: Boolean,
     uiState: TraktAuthUiState,
-    simklUiState: SimklAuthUiState,
     settingsUiState: TraktSettingsUiState,
     commentsEnabled: Boolean,
     onCommentsEnabledChange: (Boolean) -> Unit,
@@ -134,14 +137,6 @@ internal fun LazyListScope.traktSettingsContent(
         }
     }
 
-    item {
-        SettingsSection(title = "SIMKL", isTablet = isTablet) {
-            SettingsGroup(isTablet = isTablet) {
-                SimklConnectionCard(isTablet, simklUiState)
-            }
-        }
-    }
-
     if (uiState.mode == TraktConnectionMode.CONNECTED) {
         item {
             SettingsSection(
@@ -161,6 +156,31 @@ internal fun LazyListScope.traktSettingsContent(
     }
 }
 
+internal fun LazyListScope.simklSettingsContent(isTablet: Boolean, uiState: SimklAuthUiState, settingsUiState: TraktSettingsUiState) {
+    item { SettingsSection(title = "SIMKL", isTablet = isTablet) { SettingsGroup(isTablet = isTablet) { SimklConnectionCard(isTablet, uiState) } } }
+    if (uiState.mode == SimklConnectionMode.CONNECTED) {
+        item { SettingsSection(title = "SIMKL", isTablet = isTablet) { SettingsGroup(isTablet = isTablet) { SimklLibrarySourceRow(isTablet, settingsUiState) } } }
+    }
+}
+
+@Composable
+private fun SimklLibrarySourceRow(isTablet: Boolean, settingsUiState: TraktSettingsUiState) {
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+    TraktSettingsActionRow(
+        title = stringResource(Res.string.trakt_library_source_title),
+        description = stringResource(Res.string.trakt_library_source_subtitle),
+        value = librarySourceModeLabel(settingsUiState.librarySourceMode),
+        isTablet = isTablet,
+        onClick = { showDialog = true },
+    )
+    if (showDialog) LibrarySourceModeDialog(
+        selectedSource = settingsUiState.librarySourceMode,
+        sources = listOf(LibrarySourceMode.SIMKL, LibrarySourceMode.LOCAL),
+        onSourceSelected = { TraktSettingsRepository.setLibrarySourceMode(it); showDialog = false },
+        onDismiss = { showDialog = false },
+    )
+}
+
 @Composable
 private fun SimklConnectionCard(isTablet: Boolean, uiState: SimklAuthUiState) {
     val uriHandler = LocalUriHandler.current
@@ -168,10 +188,10 @@ private fun SimklConnectionCard(isTablet: Boolean, uiState: SimklAuthUiState) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = if (isTablet) 18.dp else 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Connect SIMKL to sync watch history and playback progress.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(Res.string.settings_simkl_intro), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         when (uiState.mode) {
-            SimklConnectionMode.CONNECTED -> Button(onClick = SimklAuthRepository::onDisconnectRequested) { Text("Disconnect SIMKL") }
-            else -> Button(onClick = { SimklAuthRepository.onConnectRequested()?.let { runCatching { uriHandler.openUri(it) } } }, enabled = uiState.credentialsConfigured && !uiState.isLoading) { Text(if (uiState.mode == SimklConnectionMode.AWAITING_APPROVAL) "Continue SIMKL sign-in" else "Connect SIMKL") }
+            SimklConnectionMode.CONNECTED -> Button(onClick = SimklAuthRepository::onDisconnectRequested) { Text(stringResource(Res.string.settings_simkl_disconnect)) }
+            else -> Button(onClick = { SimklAuthRepository.onConnectRequested()?.let { runCatching { uriHandler.openUri(it) } } }, enabled = uiState.credentialsConfigured && !uiState.isLoading) { Text(if (uiState.mode == SimklConnectionMode.AWAITING_APPROVAL) stringResource(Res.string.settings_simkl_continue_sign_in) else stringResource(Res.string.settings_simkl_connect)) }
         }
         uiState.statusMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         uiState.errorMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
@@ -276,6 +296,8 @@ private fun TraktFeatureRows(
                     statusMessage = if (result.succeeded) {
                         if (result.requestedSource == WatchProgressSource.TRAKT) {
                             traktProgressSelectedMessage
+                        } else if (result.requestedSource == WatchProgressSource.SIMKL) {
+                            "Progress source set to SIMKL"
                         } else {
                             nuvioProgressSelectedMessage
                         }
@@ -383,6 +405,7 @@ private fun TraktInfoRow(
 private fun librarySourceModeLabel(source: LibrarySourceMode): String =
     when (source) {
         LibrarySourceMode.TRAKT -> stringResource(Res.string.trakt_library_source_trakt)
+        LibrarySourceMode.SIMKL -> "SIMKL"
         LibrarySourceMode.LOCAL -> stringResource(Res.string.trakt_library_source_nuvio)
     }
 
@@ -390,6 +413,7 @@ private fun librarySourceModeLabel(source: LibrarySourceMode): String =
 private fun watchProgressSourceLabel(source: WatchProgressSource): String =
     when (source) {
         WatchProgressSource.TRAKT -> stringResource(Res.string.trakt_watch_progress_source_trakt)
+        WatchProgressSource.SIMKL -> "SIMKL"
         WatchProgressSource.NUVIO_SYNC -> stringResource(Res.string.trakt_watch_progress_source_nuvio)
     }
 
@@ -414,6 +438,7 @@ private fun continueWatchingDaysCapLabel(daysCap: Int): String {
 @OptIn(ExperimentalMaterial3Api::class)
 private fun LibrarySourceModeDialog(
     selectedSource: LibrarySourceMode,
+    sources: List<LibrarySourceMode> = listOf(LibrarySourceMode.TRAKT, LibrarySourceMode.SIMKL, LibrarySourceMode.LOCAL),
     onSourceSelected: (LibrarySourceMode) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -443,7 +468,7 @@ private fun LibrarySourceModeDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    listOf(LibrarySourceMode.TRAKT, LibrarySourceMode.LOCAL).forEach { source ->
+                    sources.forEach { source ->
                         TraktDialogOption(
                             label = librarySourceModeLabel(source),
                             selected = source == selectedSource,
@@ -496,7 +521,7 @@ private fun WatchProgressSourceDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    listOf(WatchProgressSource.TRAKT, WatchProgressSource.NUVIO_SYNC).forEach { source ->
+                    listOf(WatchProgressSource.TRAKT, WatchProgressSource.SIMKL, WatchProgressSource.NUVIO_SYNC).forEach { source ->
                         TraktDialogOption(
                             label = watchProgressSourceLabel(source),
                             selected = source == selectedSource,

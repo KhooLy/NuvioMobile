@@ -9,6 +9,7 @@ import com.nuvio.app.features.trakt.TraktAuthRepository
 import com.nuvio.app.features.trakt.TraktSettingsRepository
 import com.nuvio.app.features.trakt.WatchProgressSource
 import com.nuvio.app.features.trakt.effectiveWatchProgressSource
+import com.nuvio.app.features.simkl.SimklAuthRepository
 import com.nuvio.app.features.watched.WatchedRepository
 import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.locks.SynchronizedObject
@@ -235,14 +236,16 @@ object WatchProgressSourceCoordinator {
                 combine(
                     TraktSettingsRepository.uiState,
                     TraktAuthRepository.isAuthenticated,
+                    SimklAuthRepository.isAuthenticated,
                     AuthRepository.state,
                     ProfileRepository.state,
-                ) { settings, isTraktAuthenticated, authState, profileState ->
+                ) { settings, isTraktAuthenticated, isSimklAuthenticated, authState, profileState ->
                     buildContext(
                         profileId = profileState.activeProfile?.profileIndex
                             ?: ProfileRepository.activeProfileId,
                         requestedSource = settings.watchProgressSource,
                         isTraktAuthenticated = isTraktAuthenticated,
+                        isSimklAuthenticated = isSimklAuthenticated,
                         authState = authState,
                     )
                 }
@@ -261,6 +264,7 @@ object WatchProgressSourceCoordinator {
 
     private fun ensureSourceStateLoaded() {
         TraktAuthRepository.ensureLoaded()
+        SimklAuthRepository.ensureLoaded()
         TraktSettingsRepository.ensureLoaded()
     }
 
@@ -465,12 +469,14 @@ object WatchProgressSourceCoordinator {
         profileId: Int,
         requestedSource: WatchProgressSource,
         isTraktAuthenticated: Boolean,
+        isSimklAuthenticated: Boolean,
         authState: AuthState,
     ): WatchProgressSourceContext = WatchProgressSourceContext(
         profileId = profileId,
         requestedSource = requestedSource,
         effectiveSource = effectiveWatchProgressSource(
             isTraktAuthenticated = isTraktAuthenticated,
+            isSimklAuthenticated = isSimklAuthenticated,
             requestedSource = requestedSource,
         ),
         isNuvioAuthenticated = authState is AuthState.Authenticated && !authState.isAnonymous,
@@ -480,6 +486,7 @@ object WatchProgressSourceCoordinator {
         profileId = profileId,
         requestedSource = TraktSettingsRepository.uiState.value.watchProgressSource,
         isTraktAuthenticated = TraktAuthRepository.isAuthenticated.value,
+        isSimklAuthenticated = SimklAuthRepository.isAuthenticated.value,
         authState = AuthRepository.state.value,
     )
 }

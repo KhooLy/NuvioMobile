@@ -200,6 +200,28 @@ internal class LibraryLocalState {
         snapshotLocked()
     }
 
+    fun applyArtwork(
+        token: LibraryProfileToken,
+        artworkByItemKey: Map<String, String>,
+    ): LibraryLocalSnapshot? = synchronized(lock) {
+        if (!isCurrentLocked(token) || artworkByItemKey.isEmpty()) return null
+        var changed = false
+        val updated = itemsById.mapValues { (key, item) ->
+            artworkByItemKey[key]
+                ?.takeIf { item.poster.isNullOrBlank() }
+                ?.let { poster ->
+                    changed = true
+                    item.copy(poster = poster)
+                }
+                ?: item
+        }
+        if (!changed) return null
+        itemsById = updated.toMutableMap()
+        revision += 1L
+        contentRevision += 1L
+        snapshotLocked()
+    }
+
     fun toggle(item: LibraryItem): LibraryLocalToggleResult = synchronized(lock) {
         val key = libraryItemKey(item.id, item.type)
         val isSaved = if (itemsById.remove(key) != null) {
@@ -311,5 +333,5 @@ internal class LibraryLocalState {
         isCurrentLocked(snapshot.token) && contentRevision == snapshot.contentRevision
 }
 
-private fun libraryItemKey(id: String, type: String): String =
+internal fun libraryItemKey(id: String, type: String): String =
     "${type.trim().lowercase()}:${id.trim()}"

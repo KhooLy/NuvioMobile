@@ -30,6 +30,7 @@ val TraktContinueWatchingDaysOptions: List<Int> = listOf(
 @Serializable
 enum class WatchProgressSource {
     TRAKT,
+    SIMKL,
     NUVIO_SYNC;
 
     companion object {
@@ -191,17 +192,13 @@ fun shouldUseTraktProgress(
 
 fun effectiveWatchProgressSource(
     isTraktAuthenticated: Boolean,
+    isSimklAuthenticated: Boolean = false,
     requestedSource: WatchProgressSource,
-): WatchProgressSource =
-    if (shouldUseTraktProgress(
-            isAuthenticated = isTraktAuthenticated,
-            source = requestedSource,
-        )
-    ) {
-        WatchProgressSource.TRAKT
-    } else {
-        WatchProgressSource.NUVIO_SYNC
-    }
+): WatchProgressSource = when (requestedSource) {
+    WatchProgressSource.TRAKT -> WatchProgressSource.TRAKT.takeIf { isTraktAuthenticated }
+    WatchProgressSource.SIMKL -> WatchProgressSource.SIMKL.takeIf { isSimklAuthenticated }
+    WatchProgressSource.NUVIO_SYNC -> WatchProgressSource.NUVIO_SYNC
+} ?: WatchProgressSource.NUVIO_SYNC
 
 fun effectiveLibrarySourceMode(
     isAuthenticated: Boolean,

@@ -10,8 +10,10 @@ import com.nuvio.app.features.trakt.TraktAuthRepository
 import com.nuvio.app.features.trakt.TraktSettingsRepository
 import com.nuvio.app.features.trakt.WatchProgressSource
 import com.nuvio.app.features.trakt.shouldUseTraktProgress
+import com.nuvio.app.features.simkl.SimklAuthRepository
 import com.nuvio.app.features.watching.sync.SupabaseWatchedSyncAdapter
 import com.nuvio.app.features.watching.sync.TraktWatchedSyncAdapter
+import com.nuvio.app.features.watching.sync.SimklWatchedSyncAdapter
 import com.nuvio.app.features.watching.sync.WatchedDeltaEvent
 import com.nuvio.app.features.watching.sync.WatchedSyncAdapter
 import kotlinx.atomicfu.locks.SynchronizedObject
@@ -67,7 +69,7 @@ internal fun watchedItemsForSource(
     traktItems: Collection<WatchedItem>,
 ): Collection<WatchedItem> = when (source) {
     WatchProgressSource.NUVIO_SYNC -> nuvioItems
-    WatchProgressSource.TRAKT -> traktItems
+    WatchProgressSource.TRAKT, WatchProgressSource.SIMKL -> traktItems
 }
 
 internal fun shouldPersistWatchedSource(source: WatchProgressSource): Boolean =
@@ -81,7 +83,7 @@ internal fun replaceWatchedItemsForSource(
 ) {
     val target = when (source) {
         WatchProgressSource.NUVIO_SYNC -> nuvioItems
-        WatchProgressSource.TRAKT -> traktItems
+    WatchProgressSource.TRAKT, WatchProgressSource.SIMKL -> traktItems
     }
     target.clear()
     target.putAll(replacement)
@@ -132,9 +134,11 @@ object WatchedRepository {
     private var deltaInitialized: Boolean = false
     internal var syncAdapter: WatchedSyncAdapter = SupabaseWatchedSyncAdapter
     internal var traktSyncAdapter: WatchedSyncAdapter = TraktWatchedSyncAdapter
+    internal var simklSyncAdapter: WatchedSyncAdapter = SimklWatchedSyncAdapter
 
     fun ensureLoaded() {
         TraktAuthRepository.ensureLoaded()
+        SimklAuthRepository.ensureLoaded()
         TraktSettingsRepository.ensureLoaded()
         if (!hasLoaded) {
             loadFromDisk(ProfileRepository.activeProfileId)
@@ -142,6 +146,7 @@ object WatchedRepository {
                 effectiveWatchedSource(
                     requestedSource = TraktSettingsRepository.uiState.value.watchProgressSource,
                     isTraktAuthenticated = TraktAuthRepository.isAuthenticated.value,
+                    isSimklAuthenticated = SimklAuthRepository.isAuthenticated.value,
                 ),
             )
         }
@@ -275,8 +280,9 @@ object WatchedRepository {
         refreshForSource(
             profileId = profileId,
             source = effectiveWatchedSource(
-                requestedSource = TraktSettingsRepository.uiState.value.watchProgressSource,
-                isTraktAuthenticated = TraktAuthRepository.isAuthenticated.value,
+            requestedSource = TraktSettingsRepository.uiState.value.watchProgressSource,
+            isTraktAuthenticated = TraktAuthRepository.isAuthenticated.value,
+            isSimklAuthenticated = SimklAuthRepository.isAuthenticated.value,
             ),
             forceSnapshot = false,
         )
@@ -288,8 +294,9 @@ object WatchedRepository {
         refreshForSource(
             profileId = profileId,
             source = effectiveWatchedSource(
-                requestedSource = TraktSettingsRepository.uiState.value.watchProgressSource,
-                isTraktAuthenticated = TraktAuthRepository.isAuthenticated.value,
+            requestedSource = TraktSettingsRepository.uiState.value.watchProgressSource,
+            isTraktAuthenticated = TraktAuthRepository.isAuthenticated.value,
+            isSimklAuthenticated = SimklAuthRepository.isAuthenticated.value,
             ),
             forceSnapshot = true,
         )
@@ -323,9 +330,9 @@ object WatchedRepository {
             }
         }
         return try {
-            if (effectiveSource == WatchProgressSource.TRAKT) {
+            if (effectiveSource == WatchProgressSource.TRAKT || effectiveSource == WatchProgressSource.SIMKL) {
                 pullSnapshotFromAdapter(
-                    adapter = traktSyncAdapter,
+                    adapter = if (effectiveSource == WatchProgressSource.TRAKT) traktSyncAdapter else simklSyncAdapter,
                     operation = operation,
                     profileId = profileId,
                     resetDeltaState = true,
@@ -415,7 +422,7 @@ object WatchedRepository {
                     deltaInitialized = false
                 }
             }
-            WatchProgressSource.TRAKT -> {
+            WatchProgressSource.TRAKT, WatchProgressSource.SIMKL -> {
                 traktHasLoaded = true
                 traktHasLoadedRemote = true
             }
@@ -603,13 +610,13 @@ object WatchedRepository {
     private fun itemsForSource(source: WatchProgressSource): MutableMap<String, WatchedItem> =
         when (source) {
             WatchProgressSource.NUVIO_SYNC -> nuvioItemsByKey
-            WatchProgressSource.TRAKT -> traktItemsByKey
+            WatchProgressSource.TRAKT, WatchProgressSource.SIMKL -> traktItemsByKey
         }
 
     private fun fullyWatchedSeriesKeysForSource(source: WatchProgressSource): Set<String> =
         when (source) {
             WatchProgressSource.NUVIO_SYNC -> nuvioFullyWatchedSeriesKeys
-            WatchProgressSource.TRAKT -> traktFullyWatchedSeriesKeys
+            WatchProgressSource.TRAKT, WatchProgressSource.SIMKL -> traktFullyWatchedSeriesKeys
         }
 
     private fun setFullyWatchedSeriesKeysForSource(
@@ -618,14 +625,14 @@ object WatchedRepository {
     ) {
         when (source) {
             WatchProgressSource.NUVIO_SYNC -> nuvioFullyWatchedSeriesKeys = keys
-            WatchProgressSource.TRAKT -> traktFullyWatchedSeriesKeys = keys
+            WatchProgressSource.TRAKT, WatchProgressSource.SIMKL -> traktFullyWatchedSeriesKeys = keys
         }
     }
 
     private fun hasLoadedSource(source: WatchProgressSource): Boolean =
         when (source) {
             WatchProgressSource.NUVIO_SYNC -> nuvioHasLoaded
-            WatchProgressSource.TRAKT -> traktHasLoaded
+            WatchProgressSource.TRAKT, WatchProgressSource.SIMKL -> traktHasLoaded
         }
 
     fun toggleWatched(item: WatchedItem) {
@@ -884,7 +891,7 @@ object WatchedRepository {
             isLoaded = hasLoadedSource(activeSource),
             hasLoadedRemoteItems = when (activeSource) {
                 WatchProgressSource.NUVIO_SYNC -> nuvioHasLoadedRemote
-                WatchProgressSource.TRAKT -> traktHasLoadedRemote
+                WatchProgressSource.TRAKT, WatchProgressSource.SIMKL -> traktHasLoadedRemote
             },
         )
     }
@@ -947,8 +954,15 @@ object WatchedRepository {
         )
 
         if (source == WatchProgressSource.TRAKT) {
-            if (!shouldMirrorToTrakt) return false
-            traktSyncAdapter.push(profileId = profileId, items = items)
+            if (shouldMirrorToTrakt) {
+                traktSyncAdapter.push(profileId = profileId, items = items)
+            }
+            simklSyncAdapter.push(profileId = profileId, items = items)
+            return shouldMirrorToTrakt
+        }
+
+        if (source == WatchProgressSource.SIMKL) {
+            simklSyncAdapter.push(profileId = profileId, items = items)
             return true
         }
 
@@ -956,6 +970,7 @@ object WatchedRepository {
         if (shouldMirrorToTrakt) {
             traktSyncAdapter.push(profileId = profileId, items = items)
         }
+        simklSyncAdapter.push(profileId = profileId, items = items)
         return true
     }
 
@@ -966,6 +981,12 @@ object WatchedRepository {
     ) {
         if (source == WatchProgressSource.TRAKT) {
             traktSyncAdapter.delete(profileId = profileId, items = items)
+            simklSyncAdapter.delete(profileId = profileId, items = items)
+            return
+        }
+
+        if (source == WatchProgressSource.SIMKL) {
+            simklSyncAdapter.delete(profileId = profileId, items = items)
             return
         }
 
@@ -973,6 +994,7 @@ object WatchedRepository {
         if (TraktAuthRepository.isAuthenticated.value) {
             traktSyncAdapter.delete(profileId = profileId, items = items)
         }
+        simklSyncAdapter.delete(profileId = profileId, items = items)
     }
 
     private fun accountScopeSnapshot(): CoroutineScope =
@@ -1051,12 +1073,13 @@ internal fun shouldUseTraktWatchedSync(
 internal fun effectiveWatchedSource(
     requestedSource: WatchProgressSource,
     isTraktAuthenticated: Boolean,
+    isSimklAuthenticated: Boolean = false,
 ): WatchProgressSource =
-    if (shouldUseTraktWatchedSync(isAuthenticated = isTraktAuthenticated, source = requestedSource)) {
-        WatchProgressSource.TRAKT
-    } else {
-        WatchProgressSource.NUVIO_SYNC
-    }
+    when (requestedSource) {
+        WatchProgressSource.TRAKT -> WatchProgressSource.TRAKT.takeIf { isTraktAuthenticated }
+        WatchProgressSource.SIMKL -> WatchProgressSource.SIMKL.takeIf { isSimklAuthenticated }
+        WatchProgressSource.NUVIO_SYNC -> WatchProgressSource.NUVIO_SYNC
+    } ?: WatchProgressSource.NUVIO_SYNC
 
 private fun String.isSeriesLikeWatchedType(): Boolean =
     trim().lowercase() in setOf("series", "show", "tv", "tvshow")

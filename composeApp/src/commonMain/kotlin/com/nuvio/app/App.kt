@@ -1252,16 +1252,22 @@ private fun MainAppContent(
                 }
                 if (SimklAuthRepository.isAuthenticated.value && progressPercent != null && playerLaunch != null) {
                     runCatching {
-                        SimklScrobbleRepository.scrobbleStop(
-                            profileId = playerLaunch.profileId,
+                        val item = SimklScrobbleRepository.buildItem(
                             contentType = playerLaunch.parentMetaType,
                             parentMetaId = playerLaunch.parentMetaId,
                             videoId = playerLaunch.videoId,
                             title = playerLaunch.title,
                             seasonNumber = playerLaunch.seasonNumber,
                             episodeNumber = playerLaunch.episodeNumber,
-                            progressPercent = progressPercent,
+                            episodeTitle = playerLaunch.episodeTitle,
                         )
+                        if (item != null) {
+                            SimklScrobbleRepository.scrobbleStop(
+                                profileId = playerLaunch.profileId,
+                                item = item,
+                                progressPercent = progressPercent,
+                            )
+                        }
                     }
                 }
                 playerLaunch?.let { playerLaunch ->

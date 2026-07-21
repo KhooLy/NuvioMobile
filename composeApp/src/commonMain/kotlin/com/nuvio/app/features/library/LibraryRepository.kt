@@ -18,8 +18,11 @@ import com.nuvio.app.features.trakt.effectiveLibrarySourceMode as resolveEffecti
 import com.nuvio.app.features.trakt.shouldUseTraktLibrary
 import com.nuvio.app.features.simkl.SimklAuthRepository
 import com.nuvio.app.features.simkl.SimklMedia
+import com.nuvio.app.features.simkl.id
 import com.nuvio.app.features.simkl.SimklMediaType
 import com.nuvio.app.features.simkl.SimklSyncRepository
+import com.nuvio.app.features.simkl.SimklLibraryRepository
+import com.nuvio.app.features.simkl.SimklLibraryUiState
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.atomicfu.locks.SynchronizedObject
@@ -92,10 +95,21 @@ object LibraryRepository {
     private val localState = LibraryLocalState()
     private val loadLock = SynchronizedObject()
     private val nuvioPullMutex = Mutex()
+    private val simklArtworkMutex = Mutex()
+    private val simklArtworkHydratedProfiles = mutableSetOf<Int>()
     private val persistenceLock = SynchronizedObject()
     private val lastPersistedContentRevisionByProfile = mutableMapOf<Int, Long>()
 
     init {
+        syncScope.launch {
+            SimklAuthRepository.isAuthenticated.collectLatest { authenticated ->
+                if (authenticated) {
+                    hydrateSimklArtworkOnce()
+                    if (isSimklLibrarySourceActive()) SimklLibraryRepository.refreshNow()
+                }
+                publish()
+            }
+        }
         syncScope.launch {
             TraktAuthRepository.isAuthenticated.collectLatest { authenticated ->
                 if (authenticated) {
@@ -109,11 +123,6 @@ object LibraryRepository {
             }
         }
         syncScope.launch {
-            SimklAuthRepository.isAuthenticated.collectLatest { authenticated ->
-                if (authenticated) importSimklLibrary()
-            }
-        }
-        syncScope.launch {
             TraktSettingsRepository.uiState
                 .map { it.librarySourceMode }
                 .distinctUntilChanged()
@@ -122,6 +131,8 @@ object LibraryRepository {
                         TraktLibraryRepository.preloadListTabsAsync()
                         publish()
                         refreshTraktLibraryAsync()
+                    } else if (source == LibrarySourceMode.SIMKL && SimklAuthRepository.isAuthenticated.value) {
+                        SimklLibraryRepository.refreshAsync()
                     } else {
                         publish()
                     }
@@ -134,6 +145,7 @@ object LibraryRepository {
                 }
             }
         }
+        syncScope.launch { SimklLibraryRepository.uiState.collectLatest { publish() } }
     }
 
     fun ensureLoaded() {
@@ -152,10 +164,9 @@ object LibraryRepository {
                 refreshTraktLibraryAsync()
             }
         }
-        if (SimklAuthRepository.isAuthenticated.value) importSimklLibrary()
+        if (isSimklLibrarySourceActive()) SimklLibraryRepository.refreshAsync()
     }
 
-    /** Imports the user's SIMKL list into the normal Nuvio library without changing its source mode. */
     fun importSimklLibrary() {
         if (!localState.snapshot().hasLoaded) loadFromDisk(ProfileRepository.activeProfileId)
         syncScope.launch {
@@ -165,6 +176,27 @@ object LibraryRepository {
                 addAll(SimklSyncRepository.library(SimklMediaType.ANIME).mapNotNull { (it.anime ?: it.show)?.toLibraryItem("series") })
             }.distinctBy { it.type to it.id }
             items.forEach(::save)
+        }
+    }
+
+    private fun hydrateSimklArtworkOnce() {
+        syncScope.launch {
+            val profileId = ProfileRepository.activeProfileId
+            simklArtworkMutex.withLock {
+                if (!simklArtworkHydratedProfiles.add(profileId)) return@withLock
+                val token = activeOperationToken(profileId) ?: return@withLock
+                val artworkByItemKey = buildList {
+                    addAll(SimklSyncRepository.library(SimklMediaType.MOVIE).mapNotNull { it.movie?.toLibraryItem("movie") })
+                    addAll(SimklSyncRepository.library(SimklMediaType.SHOW).mapNotNull { (it.show ?: it.anime)?.toLibraryItem("series") })
+                    addAll(SimklSyncRepository.library(SimklMediaType.ANIME).mapNotNull { (it.anime ?: it.show)?.toLibraryItem("series") })
+                }.mapNotNull { item ->
+                    item.poster?.let { "${libraryItemKey(item.id, item.type)}" to it }
+                }.toMap()
+                localState.applyArtwork(token, artworkByItemKey)?.let { updated ->
+                    persist(updated)
+                    publish()
+                }
+            }
         }
     }
 
@@ -579,6 +611,14 @@ object LibraryRepository {
             }
             return
         }
+        if (isSimklLibrarySourceActive()) {
+            val state: SimklLibraryUiState = SimklLibraryRepository.uiState.value
+            val sections = state.items.groupBy { it.type }.map { (type, items) ->
+                LibrarySection(type, type.toLibraryDisplayTitle(), items)
+            }
+            _uiState.value = LibraryUiState(LibrarySourceMode.SIMKL, state.items, sections, state.hasLoaded, state.isLoading, state.errorMessage)
+            return
+        }
 
         val items = localSnapshot.items
             .sortedByDescending { it.savedAtEpochMs }
@@ -644,6 +684,9 @@ object LibraryRepository {
 
     private fun isTraktLibrarySourceActive(): Boolean =
         effectiveLibrarySourceMode() == LibrarySourceMode.TRAKT
+
+    private fun isSimklLibrarySourceActive(): Boolean =
+        selectedLibrarySourceMode() == LibrarySourceMode.SIMKL && SimklAuthRepository.isAuthenticated.value
 }
 
 internal const val LOCAL_LIBRARY_LIST_KEY = "local"
@@ -747,14 +790,23 @@ private fun localizedStringOrDefault(resource: StringResource, fallback: String)
         .getOrDefault(fallback)
 
 private fun SimklMedia.toLibraryItem(type: String): LibraryItem? {
-    val id = ids["imdb"] ?: ids["tmdb"]?.let { "tmdb:$it" } ?: return null
+    val imdbId = id("imdb")
+    val tmdbId = id("tmdb")
+    val id = imdbId ?: tmdbId?.let { "tmdb:$it" } ?: return null
     val name = title?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     return LibraryItem(
         id = id,
         type = type,
         name = name,
-        imdbId = ids["imdb"],
-        tmdbId = ids["tmdb"]?.toIntOrNull(),
+        poster = poster.toSimklPosterUrl(),
+        imdbId = imdbId,
+        tmdbId = tmdbId?.toIntOrNull(),
         savedAtEpochMs = 0L,
     )
 }
+
+private fun String?.toSimklPosterUrl(): String? =
+    this?.trim()?.takeIf { it.isNotEmpty() }?.let { path ->
+        if (path.startsWith("https://") || path.startsWith("http://")) path
+        else "https://simkl.in/posters/${path}_m.webp"
+    }

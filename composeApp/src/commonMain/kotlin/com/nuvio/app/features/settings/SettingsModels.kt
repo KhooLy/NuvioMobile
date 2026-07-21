@@ -27,6 +27,7 @@ import nuvio.composeapp.generated.resources.compose_settings_page_playback
 import nuvio.composeapp.generated.resources.compose_settings_page_plugins
 import nuvio.composeapp.generated.resources.compose_settings_page_poster_customization
 import nuvio.composeapp.generated.resources.compose_settings_page_root
+import nuvio.composeapp.generated.resources.compose_settings_page_simkl
 import nuvio.composeapp.generated.resources.compose_settings_page_streams
 import nuvio.composeapp.generated.resources.compose_settings_page_supporters_contributors
 import nuvio.composeapp.generated.resources.compose_settings_page_tmdb_enrichment
@@ -151,6 +152,11 @@ internal enum class SettingsPage(
     ),
     TraktAuthentication(
         titleRes = Res.string.compose_settings_page_trakt,
+        category = SettingsCategory.Account,
+        parentPage = Root,
+    ),
+    SimklAuthentication(
+        titleRes = Res.string.compose_settings_page_simkl,
         category = SettingsCategory.Account,
         parentPage = Root,
     ),

@@ -270,6 +270,7 @@ object WatchProgressRepository {
             updateActiveSource(
                 effectiveWatchProgressSource(
                     isTraktAuthenticated = TraktAuthRepository.isAuthenticated.value,
+                    isSimklAuthenticated = SimklAuthRepository.isAuthenticated.value,
                     requestedSource = TraktSettingsRepository.uiState.value.watchProgressSource,
                 ),
             )
@@ -283,6 +284,7 @@ object WatchProgressRepository {
         updateActiveSource(
             effectiveWatchProgressSource(
                 isTraktAuthenticated = TraktAuthRepository.isAuthenticated.value,
+                isSimklAuthenticated = SimklAuthRepository.isAuthenticated.value,
                 requestedSource = TraktSettingsRepository.uiState.value.watchProgressSource,
             ),
         )
@@ -431,12 +433,24 @@ object WatchProgressRepository {
                 force = force,
             )
 
+            WatchProgressSource.SIMKL -> refreshSimklSource(
+                profileId = profileId,
+                operationGeneration = operationGeneration,
+            )
+
             WatchProgressSource.NUVIO_SYNC -> refreshNuvioSource(
                 profileId = profileId,
                 operationGeneration = operationGeneration,
                 force = force,
             )
         }
+    }
+
+    private suspend fun refreshSimklSource(profileId: Int, operationGeneration: Long): Boolean {
+        if (!SimklAuthRepository.isAuthenticated.value) return false
+        SimklProgressRepository.refresh()
+        if (isActiveOperation(profileId, operationGeneration) && activeSource == WatchProgressSource.SIMKL) publish()
+        return true
     }
 
     private suspend fun refreshTraktSource(
@@ -1381,10 +1395,10 @@ object WatchProgressRepository {
     private fun publish() {
         val entries = currentEntries()
         val sortedEntries = entries.sortedByDescending { it.lastUpdatedEpochMs }
-        val hasLoadedRemoteProgress = if (shouldUseTraktProgress()) {
-            TraktProgressRepository.uiState.value.hasLoadedRemoteProgress
-        } else {
-            hasLoadedNuvioRemoteProgress
+        val hasLoadedRemoteProgress = when (activeSource) {
+            WatchProgressSource.TRAKT -> TraktProgressRepository.uiState.value.hasLoadedRemoteProgress
+            WatchProgressSource.SIMKL -> SimklAuthRepository.isAuthenticated.value
+            WatchProgressSource.NUVIO_SYNC -> hasLoadedNuvioRemoteProgress
         }
         _uiState.value = WatchProgressUiState(
             entries = sortedEntries,
@@ -1530,6 +1544,8 @@ object WatchProgressRepository {
                 }
                 merged
             }
+        } else if (activeSource == WatchProgressSource.SIMKL) {
+            SimklProgressRepository.entries.value
         } else {
             localEntriesSnapshot()
         }

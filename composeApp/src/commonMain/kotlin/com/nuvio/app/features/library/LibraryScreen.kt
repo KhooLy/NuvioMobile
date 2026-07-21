@@ -141,6 +141,7 @@ fun LibraryScreen(
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val isTraktSource = uiState.sourceMode == LibrarySourceMode.TRAKT
+    val isSimklSource = uiState.sourceMode == LibrarySourceMode.SIMKL
     val effectiveSortOption = effectiveLibrarySortOption(
         selected = displaySettings.sortOption,
         sourceMode = uiState.sourceMode,
@@ -248,6 +249,8 @@ fun LibraryScreen(
                                 stringResource(Res.string.library_title)
                             } else if (isTraktSource) {
                                 stringResource(Res.string.library_trakt_title)
+                            } else if (isSimklSource) {
+                                stringResource(Res.string.library_simkl_title)
                             } else {
                                 stringResource(Res.string.library_title)
                             },

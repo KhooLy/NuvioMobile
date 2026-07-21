@@ -436,6 +436,12 @@
     <string name="compose_settings_page_supporters_contributors">Supporters &amp; Contributors</string>
     <string name="compose_settings_page_tmdb_enrichment">TMDB Enrichment</string>
     <string name="compose_settings_page_trakt">Trakt</string>
+    <string name="compose_settings_page_simkl">SIMKL</string>
+    <string name="settings_simkl_description">Connect and manage your SIMKL account.</string>
+    <string name="settings_simkl_intro">Connect SIMKL to sync watch history and playback progress.</string>
+    <string name="settings_simkl_connect">Connect SIMKL</string>
+    <string name="settings_simkl_continue_sign_in">Continue SIMKL sign-in</string>
+    <string name="settings_simkl_disconnect">Disconnect SIMKL</string>
     <string name="compose_settings_root_about_section">ABOUT</string>
     <string name="compose_settings_root_account_description">Account and sync status</string>
     <string name="compose_settings_root_account_section">ACCOUNT</string>
@@ -1627,6 +1633,7 @@
     <string name="library_sort_title_asc">Title A–Z</string>
     <string name="library_sort_title_desc">Title Z–A</string>
     <string name="library_sort_trakt_order">Trakt order</string>
+    <string name="library_sort_simkl_order">SIMKL order</string>
     <string name="library_source_cloud">Cloud</string>
     <string name="library_source_saved">Saved</string>
     <string name="library_title">Library</string>
@@ -1634,6 +1641,7 @@
     <string name="library_trakt_empty_title">Your Trakt library is empty</string>
     <string name="library_trakt_load_failed">Couldn't load Trakt library</string>
     <string name="library_trakt_title">Trakt Library</string>
+    <string name="library_simkl_title">SIMKL Library</string>
     <string name="cloud_library_connect_action">Connect account</string>
     <string name="cloud_library_connect_message">Connect an account in Connected Services settings to browse playable files from your cloud library.</string>
     <string name="cloud_library_connect_title">No cloud account connected</string>
